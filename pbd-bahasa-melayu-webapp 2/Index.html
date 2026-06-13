@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ms">
+  <head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= appTitle ?></title>
+    <?!= include('Style'); ?>
+  </head>
+  <body>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-block">
+          <div class="brand-mark">BM</div>
+          <div>
+            <h1>Sistem PBD</h1>
+            <p>Bahasa Melayu</p>
+          </div>
+        </div>
+
+        <nav class="nav-list" aria-label="Navigasi utama">
+          <button class="nav-item active" data-view="dashboard"><span>▦</span>Dashboard</button>
+          <button class="nav-item" data-view="students"><span>☷</span>Murid</button>
+          <button class="nav-item" data-view="profile"><span>✦</span>Profil Kemahiran Bahasa</button>
+          <button class="nav-item" data-view="evidence"><span>⇧</span>Evidens</button>
+          <button class="nav-item" data-view="reports"><span>▤</span>Laporan</button>
+          <button class="nav-item" data-view="settings"><span>⚙</span>Tetapan</button>
+        </nav>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <h2 id="pageTitle">Dashboard Utama</h2>
+            <p id="pageSubtitle">Ringkasan penguasaan kemahiran Bahasa Melayu.</p>
+          </div>
+          <div class="topbar-actions">
+            <button class="secondary-btn" id="refreshBtn" type="button">⟳ Segar Semula</button>
+            <button class="primary-btn" id="quickStudentBtn" type="button">+ Murid</button>
+          </div>
+        </header>
+
+        <section id="view-dashboard" class="view active">
+          <div class="metric-grid">
+            <article class="metric-card">
+              <span>Jumlah Murid</span>
+              <strong id="metricTotalStudents">0</strong>
+              <small>rekod aktif</small>
+            </article>
+            <article class="metric-card accent-green">
+              <span>Kelas</span>
+              <strong id="metricTotalClasses">0</strong>
+              <small>kelas direkod</small>
+            </article>
+            <article class="metric-card accent-orange">
+              <span>Perlu Sokongan</span>
+              <strong id="metricSupportCount">0</strong>
+              <small>kemahiran belum lengkap</small>
+            </article>
+            <article class="metric-card accent-blue">
+              <span>Purata Penguasaan</span>
+              <strong id="metricAverageMastery">0%</strong>
+              <small>semua kemahiran</small>
+            </article>
+          </div>
+
+          <div class="two-column">
+            <article class="panel">
+              <div class="panel-header">
+                <h3>Peratus Penguasaan Kemahiran</h3>
+                <span>6 kemahiran BM</span>
+              </div>
+              <div id="dashboardSkillSummary" class="skill-summary-list"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <h3>Bilangan Murid Mengikut Kelas</h3>
+                <span>taburan kelas</span>
+              </div>
+              <div id="classCounts" class="class-counts"></div>
+            </article>
+          </div>
+
+          <article class="panel">
+            <div class="panel-header">
+              <h3>Murid Belum Menguasai Kemahiran Tertentu</h3>
+              <span id="supportTableCount">0 rekod</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nama Murid</th>
+                    <th>Kelas</th>
+                    <th>Kemahiran</th>
+                    <th>Status</th>
+                    <th>TP</th>
+                  </tr>
+                </thead>
+                <tbody id="supportTableBody"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <h3>Ringkasan Perkembangan Kelas</h3>
+              <span>automatik</span>
+            </div>
+            <p id="classDevelopmentText" class="development-text"></p>
+          </article>
+        </section>
+
+        <section id="view-students" class="view">
+          <div class="toolbar">
+            <input id="studentSearch" type="search" placeholder="Cari nama, MyKid atau kelas">
+            <select id="studentClassFilter"></select>
+            <button class="primary-btn" id="addStudentBtn" type="button">+ Tambah Murid</button>
+          </div>
+
+          <article class="panel">
+            <div class="panel-header">
+              <h3>Senarai Murid</h3>
+              <span id="studentCountLabel">0 murid</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nama</th>
+                    <th>MyKid / ID</th>
+                    <th>Kelas</th>
+                    <th>Jantina</th>
+                    <th>Guru</th>
+                    <th>Tindakan</th>
+                  </tr>
+                </thead>
+                <tbody id="studentsTableBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section id="view-profile" class="view">
+          <div class="toolbar">
+            <select id="profileStudentSelect"></select>
+            <button class="secondary-btn" id="printProfileBtn" type="button">⎙ Cetak Profil</button>
+          </div>
+
+          <div class="profile-layout">
+            <article class="aura-panel">
+              <div class="student-aura" id="skillAura"></div>
+            </article>
+
+            <aside class="profile-side">
+              <article class="panel">
+                <div class="panel-header">
+                  <h3>Profil Murid</h3>
+                  <span id="profileUpdatedLabel">terkini</span>
+                </div>
+                <div id="profileDetails" class="info-list"></div>
+              </article>
+
+              <article class="panel">
+                <div class="panel-header">
+                  <h3>Status Keseluruhan</h3>
+                  <span id="profilePercent">0%</span>
+                </div>
+                <div class="progress-line"><span id="profileProgressFill"></span></div>
+                <p id="profileStatusText" class="muted-text"></p>
+              </article>
+
+              <article class="panel">
+                <div class="panel-header">
+                  <h3>Kuasa Pecahan Membaca</h3>
+                  <span id="masteredCountLabel">0</span>
+                </div>
+                <div id="masteredSkillChips" class="chip-list"></div>
+              </article>
+
+              <article class="panel">
+                <div class="panel-header">
+                  <h3>Kesimpulan Automatik</h3>
+                  <span>profil</span>
+                </div>
+                <div id="profileAutoConclusion" class="profile-conclusion"></div>
+              </article>
+            </aside>
+          </div>
+
+          <article class="panel">
+            <div class="panel-header">
+              <h3>Rekod Pecahan Kemahiran Membaca</h3>
+              <span>TP1 hingga TP6</span>
+            </div>
+            <form id="assessmentForm" class="assessment-form">
+              <input type="hidden" id="assessmentId">
+              <input type="hidden" id="assessmentReadingScale">
+              <label>
+                Murid
+                <select id="assessmentStudentId" required></select>
+              </label>
+              <label>
+                Kemahiran
+                <select id="assessmentSkill" required></select>
+              </label>
+              <section id="readingLevelBoard" class="reading-level-board wide-field is-hidden" aria-live="polite">
+                <div class="reading-board-heading">
+                  <div>
+                    <strong>Papan Tanda Skala Membaca</strong>
+                    <p>Pilih skala bacaan murid. Skala ini ialah bacaan ringkas guru dan tidak mengubah TP.</p>
+                  </div>
+                  <span>Skala 1-3</span>
+                </div>
+                <div id="readingLevelOptions" class="reading-level-options"></div>
+              </section>
+              <label>
+                Status
+                <select id="assessmentStatus" required></select>
+              </label>
+              <label>
+                Tahap Penguasaan
+                <select id="assessmentTP" required></select>
+              </label>
+              <label>
+                Tarikh Pentaksiran
+                <input type="date" id="assessmentDate" required>
+              </label>
+              <section class="comment-scale-board wide-field">
+                <div class="reading-board-heading">
+                  <div>
+                    <strong>Komen Guru Mengikut Skala/Tahap</strong>
+                    <p>Isi komen manual. Sistem akan menjana kesimpulan automatik dan memaparkannya dalam profil murid.</p>
+                  </div>
+                  <span>komen manual</span>
+                </div>
+                <div class="comment-scale-grid">
+                  <label class="comment-scale-field scale-3">
+                    Skala 3 / Tahap Tinggi
+                    <textarea id="commentScale3" rows="3" placeholder="Contoh: Murid membaca dengan lancar dan yakin."></textarea>
+                  </label>
+                  <label class="comment-scale-field scale-2">
+                    Skala 2 / Tahap Sederhana
+                    <textarea id="commentScale2" rows="3" placeholder="Contoh: Murid boleh membaca ayat mudah dengan bimbingan."></textarea>
+                  </label>
+                  <label class="comment-scale-field scale-1">
+                    Skala 1 / Tahap Rendah
+                    <textarea id="commentScale1" rows="3" placeholder="Contoh: Murid perlu latihan mengecam suku kata asas."></textarea>
+                  </label>
+                </div>
+                <div id="commentConclusionPreview" class="comment-conclusion-preview"></div>
+              </section>
+              <label class="wide-field">
+                Catatan Guru
+                <textarea id="assessmentNote" rows="3" placeholder="Catatan pemerhatian, intervensi atau pengayaan"></textarea>
+              </label>
+              <label class="wide-field">
+                Evidens Lampiran
+                <input type="file" id="assessmentEvidence" accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,audio/*,video/*">
+              </label>
+              <div class="form-actions wide-field">
+                <button class="secondary-btn" id="resetAssessmentBtn" type="button">Kosongkan</button>
+                <button class="primary-btn" type="submit">Simpan Rekod</button>
+              </div>
+            </form>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <h3>Sejarah Pentaksiran Murid</h3>
+              <span id="assessmentHistoryCount">0 rekod</span>
+            </div>
+            <div id="assessmentHistory" class="assessment-history"></div>
+          </article>
+        </section>
+
+        <section id="view-evidence" class="view">
+          <article class="panel">
+            <div class="panel-header">
+              <h3>Upload Evidens</h3>
+              <span>Google Drive</span>
+            </div>
+            <form id="evidenceForm" class="assessment-form">
+              <label>
+                Murid
+                <select id="evidenceStudentId" required></select>
+              </label>
+              <label>
+                Assessment
+                <select id="evidenceAssessmentId"></select>
+              </label>
+              <label class="wide-field">
+                Fail Evidens
+                <input type="file" id="evidenceFile" required accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,audio/*,video/*">
+              </label>
+              <div class="form-actions wide-field">
+                <button class="primary-btn" type="submit">Upload ke Drive</button>
+              </div>
+            </form>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <h3>Senarai Evidens</h3>
+              <span id="evidenceCountLabel">0 fail</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fail</th>
+                    <th>Murid</th>
+                    <th>Jenis</th>
+                    <th>Tarikh Upload</th>
+                    <th>Pautan</th>
+                    <th>Tindakan</th>
+                  </tr>
+                </thead>
+                <tbody id="evidenceTableBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section id="view-reports" class="view">
+          <div class="toolbar">
+            <select id="reportClassSelect"></select>
+            <select id="reportStudentSelect"></select>
+            <button class="secondary-btn" id="generateReportBtn" type="button">Jana Laporan</button>
+            <button class="secondary-btn" id="printReportBtn" type="button">⎙ Cetak / PDF</button>
+          </div>
+
+          <div id="reportOutput" class="report-output"></div>
+        </section>
+
+        <section id="view-settings" class="view">
+          <article class="panel">
+            <div class="panel-header">
+              <h3>Tetapan Sistem</h3>
+              <span>Google Sheets & Drive</span>
+            </div>
+            <form id="settingsForm" class="settings-form">
+              <label>
+                Drive Folder ID Evidens
+                <input id="settingDriveFolderId" type="text" placeholder="Masukkan Google Drive Folder ID">
+              </label>
+              <label>
+                Nama Sekolah
+                <input id="settingSchoolName" type="text" placeholder="Contoh: SK Kampung Kenang">
+              </label>
+              <label>
+                Emel Dibenarkan
+                <textarea id="settingAllowedEmails" rows="3" placeholder="guru1@sekolah.edu.my,guru2@sekolah.edu.my"></textarea>
+              </label>
+              <button class="primary-btn" type="submit">Simpan Tetapan</button>
+            </form>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="studentDialog" class="modal">
+      <form id="studentForm" method="dialog">
+        <input type="hidden" id="studentId">
+        <div class="modal-header">
+          <h3 id="studentDialogTitle">Tambah Murid</h3>
+          <button class="icon-btn" type="button" data-close-dialog>×</button>
+        </div>
+        <label>
+          Nama Murid
+          <input id="studentName" type="text" required>
+        </label>
+        <label>
+          No. MyKid / ID
+          <input id="studentMyKid" type="text">
+        </label>
+        <label>
+          Kelas
+          <input id="studentClass" type="text" required>
+        </label>
+        <label>
+          Jantina
+          <select id="studentGender">
+            <option value="">Pilih</option>
+            <option>Lelaki</option>
+            <option>Perempuan</option>
+          </select>
+        </label>
+        <label>
+          Nama Guru
+          <input id="studentTeacher" type="text">
+        </label>
+        <div class="form-actions">
+          <button class="secondary-btn" type="button" data-close-dialog>Batal</button>
+          <button class="primary-btn" type="submit">Simpan</button>
+        </div>
+      </form>
+    </dialog>
+
+    <template id="emptyStateTemplate">
+      <div class="empty-state">
+        <strong>Tiada data</strong>
+        <p>Tambah rekod untuk memaparkan maklumat di sini.</p>
+      </div>
+    </template>
+
+    <?!= include('Script'); ?>
+  </body>
+</html>

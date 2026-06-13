@@ -1,0 +1,1292 @@
+<script>
+  const state = {
+    appTitle: '',
+    skills: [],
+    statuses: [],
+    tpLevels: [],
+    settings: {},
+    students: [],
+    assessments: [],
+    evidence: [],
+    dashboard: null,
+    currentView: 'dashboard',
+    selectedStudentId: ''
+  };
+
+  const viewMeta = {
+    dashboard: ['Dashboard Utama', 'Ringkasan penguasaan kemahiran Bahasa Melayu.'],
+    students: ['Modul Murid', 'Tambah, edit, padam, cari dan tapis murid.'],
+    profile: ['Profil Kemahiran Bahasa', 'Visual aura pecahan kemahiran membaca murid dengan tiga skala kuasa.'],
+    evidence: ['Modul Evidens', 'Upload dan rekod pautan evidens ke Google Drive.'],
+    reports: ['Modul Laporan', 'Laporan individu, kelas, TP dan senarai penguasaan.'],
+    settings: ['Tetapan', 'Tetapkan folder Drive, sekolah dan akses emel.']
+  };
+
+  const readingSkills = [
+    'Huruf Kecil',
+    'Huruf Besar',
+    'Huruf Vokal',
+    'Suku Kata KV',
+    'Perkataan KV+KV',
+    'Suku Kata V+KV',
+    'Perkataan KV+KV+KV',
+    'Perkataan KVK',
+    'Suku Kata KVK',
+    'Perkataan V+KVK',
+    'Perkataan KV+KVK',
+    'Perkataan KVK+KV',
+    'Perkataan KVK+KVK',
+    'Perkataan KV+KV+KVK',
+    'Perkataan KVK+KV+KVK',
+    'Perkataan KVKK',
+    'Suku Kata KVKK',
+    'Perkataan KV+KVKK',
+    'Perkataan V+KVKK',
+    'Perkataan KVK+KVKK',
+    'Perkataan KVKK+KV',
+    'Perkataan KVKK+KVK',
+    'Perkataan KVKK+KVKK',
+    'Perkataan KV+KV+KVKK',
+    'Perkataan KV+KVK+KVKK',
+    'Perkataan KVK+KV+KVKK',
+    'Perkataan KVKK+KV+KVK',
+    'Perkataan KV+KVKK+KVK',
+    'Perkataan Diftong & Vokal Berganding',
+    'Perkataan Huruf Konsonan Bergabung (Digraf)',
+    'Membaca frasa berdasarkan gambar',
+    'Bacaan ayat berdasarkan gambar',
+    'Bacaan ayat mudah',
+    'Bacaan ayat dengan gambar bersiri',
+    'Bacaan ayat dalam perenggan'
+  ];
+
+  const readingLevelGuide = [
+    {
+      key: 'tinggi',
+      scale: 'Skala 3',
+      title: 'Tahap Paling Tinggi',
+      label: 'Pembaca Berdikari',
+      color: '#0f766e',
+      description: 'Murid membaca lancar dengan sebutan, intonasi dan jeda yang sesuai; memahami maksud tersurat dan tersirat serta boleh memberi respons atau rumusan dengan yakin.'
+    },
+    {
+      key: 'sederhana',
+      scale: 'Skala 2',
+      title: 'Tahap Sederhana',
+      label: 'Pembaca Berkembang',
+      color: '#b7791f',
+      description: 'Murid boleh membaca perkataan, frasa atau ayat mudah dan memahami maklumat asas, tetapi masih memerlukan bimbingan untuk kelancaran, intonasi atau teks yang lebih panjang.'
+    },
+    {
+      key: 'rendah',
+      scale: 'Skala 1',
+      title: 'Tahap Rendah',
+      label: 'Perlu Bimbingan Rapat',
+      color: '#b91c1c',
+      description: 'Murid masih membina kemahiran mengecam huruf, suku kata atau perkataan asas; bacaan belum lancar dan memerlukan latihan pemulihan secara berulang.'
+    }
+  ];
+
+  const commentScaleFields = [
+    { key: 'CommentScale3', selector: '#commentScale3', label: 'Skala 3 / Tahap Tinggi' },
+    { key: 'CommentScale2', selector: '#commentScale2', label: 'Skala 2 / Tahap Sederhana' },
+    { key: 'CommentScale1', selector: '#commentScale1', label: 'Skala 1 / Tahap Rendah' }
+  ];
+
+  const auraPositions = [
+    { x: 50, y: 13 },
+    { x: 83, y: 31 },
+    { x: 83, y: 70 },
+    { x: 50, y: 88 },
+    { x: 17, y: 70 },
+    { x: 17, y: 31 }
+  ];
+
+  document.addEventListener('DOMContentLoaded', initApp);
+
+  async function initApp() {
+    bindEvents();
+    setLoading(true);
+    try {
+      const data = await server('getInitialData');
+      Object.assign(state, data);
+      state.selectedStudentId = state.students[0]?.StudentID || '';
+      renderAll();
+      toast('Sistem berjaya dimuatkan.');
+    } catch (error) {
+      toast(error.message || String(error), 'error');
+      const data = getMockData();
+      Object.assign(state, data);
+      state.selectedStudentId = state.students[0]?.StudentID || '';
+      renderAll();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function bindEvents() {
+    document.querySelectorAll('.nav-item').forEach(button => {
+      button.addEventListener('click', () => switchView(button.dataset.view));
+    });
+
+    qs('#refreshBtn').addEventListener('click', reloadData);
+    qs('#quickStudentBtn').addEventListener('click', openStudentDialog);
+    qs('#addStudentBtn').addEventListener('click', openStudentDialog);
+    qs('#studentSearch').addEventListener('input', renderStudents);
+    qs('#studentClassFilter').addEventListener('change', renderStudents);
+    qs('#profileStudentSelect').addEventListener('change', event => {
+      state.selectedStudentId = event.target.value;
+      syncStudentSelectors();
+      renderProfile();
+      renderAssessmentHistory();
+    });
+    qs('#assessmentStudentId').addEventListener('change', event => {
+      state.selectedStudentId = event.target.value;
+      syncStudentSelectors();
+      renderProfile();
+      renderAssessmentHistory();
+      renderEvidenceAssessmentOptions();
+    });
+    qs('#assessmentSkill').addEventListener('change', handleAssessmentSkillChange);
+    qs('#assessmentStatus').addEventListener('change', refreshAssessmentAssistants);
+    qs('#assessmentTP').addEventListener('change', refreshAssessmentAssistants);
+    qs('#assessmentNote').addEventListener('input', renderCommentConclusionPreview);
+    commentScaleFields.forEach(field => qs(field.selector).addEventListener('input', renderCommentConclusionPreview));
+    qs('#readingLevelOptions').addEventListener('click', event => {
+      const button = event.target.closest('[data-reading-level]');
+      if (button) applyReadingLevel(button.dataset.readingLevel);
+    });
+    qs('#evidenceStudentId').addEventListener('change', event => {
+      state.selectedStudentId = event.target.value;
+      syncStudentSelectors();
+      renderEvidenceAssessmentOptions();
+    });
+    qs('#resetAssessmentBtn').addEventListener('click', resetAssessmentForm);
+    qs('#printProfileBtn').addEventListener('click', () => window.print());
+    qs('#printReportBtn').addEventListener('click', () => window.print());
+    qs('#generateReportBtn').addEventListener('click', renderReports);
+    qs('#reportClassSelect').addEventListener('change', renderReportStudentOptions);
+
+    qs('#studentForm').addEventListener('submit', handleStudentSubmit);
+    qs('#assessmentForm').addEventListener('submit', handleAssessmentSubmit);
+    qs('#evidenceForm').addEventListener('submit', handleEvidenceSubmit);
+    qs('#settingsForm').addEventListener('submit', handleSettingsSubmit);
+
+    document.querySelectorAll('[data-close-dialog]').forEach(button => {
+      button.addEventListener('click', () => qs('#studentDialog').close());
+    });
+  }
+
+  async function reloadData() {
+    setLoading(true);
+    try {
+      const data = await server('getInitialData');
+      Object.assign(state, data);
+      if (!state.students.some(student => student.StudentID === state.selectedStudentId)) {
+        state.selectedStudentId = state.students[0]?.StudentID || '';
+      }
+      renderAll();
+      toast('Data dikemas kini.');
+    } catch (error) {
+      toast(error.message || String(error), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function renderAll() {
+    renderSelectors();
+    renderDashboard();
+    renderStudents();
+    renderProfile();
+    renderAssessmentFormOptions();
+    renderAssessmentHistory();
+    renderEvidence();
+    renderReports();
+    renderSettings();
+  }
+
+  function switchView(viewName) {
+    state.currentView = viewName;
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.view === viewName);
+    });
+    document.querySelectorAll('.view').forEach(section => {
+      section.classList.toggle('active', section.id === `view-${viewName}`);
+    });
+    qs('#pageTitle').textContent = viewMeta[viewName][0];
+    qs('#pageSubtitle').textContent = viewMeta[viewName][1];
+
+    if (viewName === 'reports') renderReports();
+  }
+
+  function renderSelectors() {
+    const classOptions = uniqueClasses();
+    fillSelect(qs('#studentClassFilter'), [''].concat(classOptions), ['Semua Kelas'].concat(classOptions));
+    fillSelect(qs('#reportClassSelect'), [''].concat(classOptions), ['Semua Kelas'].concat(classOptions));
+
+    const studentValues = state.students.map(student => student.StudentID);
+    const studentLabels = state.students.map(student => `${student.Name} (${student.Class || '-'})`);
+    fillSelect(qs('#profileStudentSelect'), studentValues, studentLabels);
+    fillSelect(qs('#assessmentStudentId'), studentValues, studentLabels);
+    fillSelect(qs('#evidenceStudentId'), studentValues, studentLabels);
+    fillSelect(qs('#reportStudentSelect'), [''].concat(studentValues), ['Semua Murid'].concat(studentLabels));
+
+    if (state.selectedStudentId) {
+      ['#profileStudentSelect', '#assessmentStudentId', '#evidenceStudentId'].forEach(selector => {
+        qs(selector).value = state.selectedStudentId;
+      });
+    }
+
+    renderAssessmentFormOptions();
+    renderEvidenceAssessmentOptions();
+    renderReportStudentOptions();
+  }
+
+  function syncStudentSelectors() {
+    ['#profileStudentSelect', '#assessmentStudentId', '#evidenceStudentId'].forEach(selector => {
+      const element = qs(selector);
+      if (element) element.value = state.selectedStudentId;
+    });
+  }
+
+  function renderAssessmentFormOptions() {
+    fillSelect(qs('#assessmentSkill'), state.skills, state.skills);
+    fillSelect(qs('#assessmentStatus'), state.statuses, state.statuses);
+    fillSelect(qs('#assessmentTP'), state.tpLevels, state.tpLevels);
+    qs('#assessmentDate').value = today();
+    if (state.selectedStudentId) qs('#assessmentStudentId').value = state.selectedStudentId;
+    refreshAssessmentAssistants();
+  }
+
+  function refreshAssessmentAssistants() {
+    renderReadingLevelBoard();
+    renderCommentConclusionPreview();
+  }
+
+  function renderReadingLevelBoard() {
+    const board = qs('#readingLevelBoard');
+    const options = qs('#readingLevelOptions');
+    const isReading = qs('#assessmentSkill').value === 'Membaca';
+    board.classList.toggle('is-hidden', !isReading);
+
+    if (!isReading) {
+      options.innerHTML = '';
+      return;
+    }
+
+    const current = detectReadingLevelFromForm();
+    options.innerHTML = readingLevelGuide.map(level => `
+      <button type="button" class="reading-level-card ${current === level.key ? 'active' : ''}" data-reading-level="${level.key}" style="--level-color:${level.color}">
+        <strong>${escapeHtml(level.scale)} - ${escapeHtml(level.title)}</strong>
+        <span>${escapeHtml(level.label)}</span>
+        <small>${escapeHtml(level.description)}</small>
+      </button>
+    `).join('');
+  }
+
+  function handleAssessmentSkillChange() {
+    if (qs('#assessmentSkill').value !== 'Membaca') {
+      qs('#assessmentReadingScale').value = '';
+      qs('#assessmentNote').value = removeReadingLevelNote(qs('#assessmentNote').value);
+    }
+    refreshAssessmentAssistants();
+  }
+
+  function applyReadingLevel(key) {
+    const level = readingLevelGuide.find(item => item.key === key);
+    if (!level) return;
+
+    qs('#assessmentReadingScale').value = level.scale;
+    qs('#assessmentNote').value = mergeReadingLevelNote(qs('#assessmentNote').value, level);
+    refreshAssessmentAssistants();
+  }
+
+  function detectReadingLevelFromForm() {
+    const selectedScale = qs('#assessmentReadingScale').value;
+    if (selectedScale) {
+      const fromScale = readingLevelGuide.find(level => level.scale === selectedScale);
+      if (fromScale) return fromScale.key;
+    }
+
+    const note = qs('#assessmentNote').value || '';
+    const fromNote = note.match(/(?:Skala|Tahap) Membaca:\s*(?:Skala [123]\s*-\s*)?(Tahap Paling Tinggi|Tahap Sederhana|Tahap Rendah)/i);
+
+    if (fromNote) {
+      const found = readingLevelGuide.find(level => level.title.toLowerCase() === fromNote[1].toLowerCase());
+      if (found) return found.key;
+    }
+
+    return '';
+  }
+
+  function detectReadingScaleFromNote(note) {
+    const fromScale = String(note || '').match(/Skala Membaca:\s*(Skala [123])/i);
+    return fromScale ? fromScale[1] : '';
+  }
+
+  function mergeReadingLevelNote(existingNote, level) {
+    const levelNote = `Skala Membaca: ${level.scale} - ${level.title} (${level.label}). Maksud: ${level.description}`;
+    const cleaned = removeReadingLevelNote(existingNote);
+    return cleaned ? `${levelNote}\n${cleaned}` : levelNote;
+  }
+
+  function removeReadingLevelNote(note) {
+    return (note || '')
+      .split('\n')
+      .filter(line => {
+        const trimmed = line.trim();
+        return !trimmed.startsWith('Tahap Membaca:') && !trimmed.startsWith('Skala Membaca:');
+      })
+      .join('\n')
+      .trim();
+  }
+
+  function getCommentScalePayload() {
+    return {
+      ReadingScale: qs('#assessmentReadingScale').value,
+      CommentScale3: qs('#commentScale3').value.trim(),
+      CommentScale2: qs('#commentScale2').value.trim(),
+      CommentScale1: qs('#commentScale1').value.trim()
+    };
+  }
+
+  function renderCommentConclusionPreview() {
+    const payload = {
+      Skill: qs('#assessmentSkill').value,
+      Status: qs('#assessmentStatus').value,
+      TPLevel: qs('#assessmentTP').value,
+      TeacherNote: qs('#assessmentNote').value,
+      ...getCommentScalePayload()
+    };
+    const conclusion = buildAssessmentConclusion(payload);
+    qs('#commentConclusionPreview').innerHTML = conclusion
+      ? `<strong>Kesimpulan automatik:</strong> ${escapeHtml(conclusion)}`
+      : 'Isi komen manual mengikut skala/tahap untuk menjana kesimpulan automatik.';
+  }
+
+  function buildAssessmentConclusion(row) {
+    const comments = commentScaleFields
+      .map(field => ({ label: field.label, text: String(row[field.key] || '').trim() }))
+      .filter(item => item.text);
+    const readingScale = row.ReadingScale ? `${row.ReadingScale}. ` : '';
+    const skill = row.Skill || 'pecahan membaca ini';
+    const status = row.Status || '-';
+    const tp = row.TPLevel || '-';
+
+    if (!comments.length && !row.TeacherNote) {
+      return '';
+    }
+
+    const commentText = comments.map(item => `${item.label}: ${item.text}`).join(' ');
+    const noteText = row.TeacherNote ? ` Catatan tambahan: ${stripGeneratedNote(row.TeacherNote)}` : '';
+    return `${readingScale}Bagi pecahan membaca ${skill}, status semasa ialah ${status} (${tp}). ${commentText}${noteText}`.replace(/\s+/g, ' ').trim();
+  }
+
+  function stripGeneratedNote(note) {
+    return removeReadingLevelNote(note || '').trim();
+  }
+
+  function renderEvidenceAssessmentOptions() {
+    const select = qs('#evidenceAssessmentId');
+    const rows = state.assessments.filter(row => row.StudentID === state.selectedStudentId);
+    const values = [''].concat(rows.map(row => row.AssessmentID));
+    const labels = ['Tiada / evidens umum'].concat(rows.map(row => `${row.Skill} - ${row.TPLevel} - ${formatDate(row.AssessmentDate)}`));
+    fillSelect(select, values, labels);
+  }
+
+  function renderDashboard() {
+    const dashboard = state.dashboard || buildClientDashboard();
+    const classNames = Object.keys(dashboard.classCounts || {});
+    const supportRows = dashboard.needsSupport || [];
+    const avg = averageMastery(dashboard.skillSummary || []);
+
+    qs('#metricTotalStudents').textContent = dashboard.totalStudents || 0;
+    qs('#metricTotalClasses').textContent = classNames.length;
+    qs('#metricSupportCount').textContent = supportRows.length;
+    qs('#metricAverageMastery').textContent = `${avg}%`;
+    qs('#classDevelopmentText').textContent = dashboard.classDevelopmentText || '';
+
+    qs('#dashboardSkillSummary').innerHTML = (dashboard.skillSummary || []).map(row => `
+      <div class="summary-row">
+        <strong>${escapeHtml(row.Skill)}</strong>
+        <div class="bar-track"><span class="bar-fill" style="width:${row.MasteryPercent || 0}%"></span></div>
+        <span>${row.MasteryPercent || 0}%</span>
+      </div>
+    `).join('') || emptyState();
+
+    qs('#classCounts').innerHTML = classNames.map(name => {
+      const count = dashboard.classCounts[name];
+      const width = dashboard.totalStudents ? Math.round(count / dashboard.totalStudents * 100) : 0;
+      return `
+        <div class="class-row">
+          <strong>${escapeHtml(name)}</strong>
+          <div class="bar-track"><span class="bar-fill" style="width:${width}%"></span></div>
+          <span>${count}</span>
+        </div>
+      `;
+    }).join('') || emptyState();
+
+    qs('#supportTableCount').textContent = `${supportRows.length} rekod`;
+    qs('#supportTableBody').innerHTML = supportRows.slice(0, 80).map(row => `
+      <tr>
+        <td>${escapeHtml(row.Name)}</td>
+        <td>${escapeHtml(row.Class)}</td>
+        <td>${escapeHtml(row.Skill)}</td>
+        <td>${statusBadge(row.Status)}</td>
+        <td>${escapeHtml(row.TPLevel)}</td>
+      </tr>
+    `).join('') || tableEmpty(5);
+  }
+
+  function renderStudents() {
+    const search = qs('#studentSearch').value.toLowerCase();
+    const classFilter = qs('#studentClassFilter').value;
+    let rows = state.students.slice();
+
+    if (search) {
+      rows = rows.filter(student =>
+        String(student.Name || '').toLowerCase().includes(search) ||
+        String(student.MyKid || '').toLowerCase().includes(search) ||
+        String(student.Class || '').toLowerCase().includes(search)
+      );
+    }
+
+    if (classFilter) {
+      rows = rows.filter(student => student.Class === classFilter);
+    }
+
+    qs('#studentCountLabel').textContent = `${rows.length} murid`;
+    qs('#studentsTableBody').innerHTML = rows.map(student => `
+      <tr>
+        <td><strong>${escapeHtml(student.Name)}</strong></td>
+        <td>${escapeHtml(student.MyKid || '-')}</td>
+        <td>${escapeHtml(student.Class || '-')}</td>
+        <td>${escapeHtml(student.Gender || '-')}</td>
+        <td>${escapeHtml(student.TeacherName || '-')}</td>
+        <td>
+          <div class="row-actions">
+            <button class="secondary-btn" type="button" onclick="openStudentDialog('${student.StudentID}')">Edit</button>
+            <button class="secondary-btn" type="button" onclick="selectStudentProfile('${student.StudentID}')">Profil</button>
+            <button class="danger-btn" type="button" onclick="deleteStudentRecord('${student.StudentID}')">Padam</button>
+          </div>
+        </td>
+      </tr>
+    `).join('') || tableEmpty(6);
+  }
+
+  function renderProfile() {
+    const student = selectedStudent();
+    const aura = qs('#skillAura');
+
+    if (!student) {
+      aura.innerHTML = emptyState();
+      qs('#profileDetails').innerHTML = emptyState();
+      qs('#profilePercent').textContent = '0%';
+      qs('#profileProgressFill').style.width = '0%';
+      qs('#profileStatusText').textContent = 'Pilih murid untuk melihat profil kemahiran bahasa.';
+      qs('#masteredSkillChips').innerHTML = '';
+      qs('#profileAutoConclusion').innerHTML = emptyState();
+      return;
+    }
+
+    const latest = latestSkillMap(student.StudentID);
+    const overall = calculateOverall(latest);
+    const initials = makeInitials(student.Name);
+    const mastered = state.skills.filter(skill => getSkillLevel(latest[skill]) === 2);
+
+    aura.innerHTML = `
+      <div class="aura-grid"></div>
+      <div class="aura-ring r1"></div>
+      <div class="aura-ring r2"></div>
+      <div class="aura-ring r3"></div>
+      <div class="student-core">
+        <div class="avatar-circle">${escapeHtml(initials)}</div>
+        <h3>${escapeHtml(student.Name)}</h3>
+        <p>${overall.percent}% penguasaan keseluruhan</p>
+      </div>
+      ${state.skills.map((skill, index) => skillNode(skill, latest[skill], getAuraPosition(index), index)).join('')}
+    `;
+
+    qs('#profileDetails').innerHTML = [
+      ['Nama', student.Name],
+      ['MyKid / ID', student.MyKid || '-'],
+      ['Kelas', student.Class || '-'],
+      ['Jantina', student.Gender || '-'],
+      ['Guru', student.TeacherName || '-']
+    ].map(([label, value]) => infoRow(label, value)).join('');
+
+    qs('#profilePercent').textContent = `${overall.percent}%`;
+    qs('#profileProgressFill').style.width = `${overall.percent}%`;
+    qs('#profileStatusText').textContent = overallText(overall);
+    qs('#masteredCountLabel').textContent = state.skills.length;
+    qs('#masteredSkillChips').innerHTML = state.skills.map((skill, index) => {
+      const level = getSkillLevel(latest[skill]);
+      return `<span class="chip skill-power-chip level-${level}">K${index + 1} ${escapeHtml(skill)}: ${escapeHtml(powerLevelLabel(level))}</span>`;
+    }).join('');
+    qs('#profileAutoConclusion').innerHTML = renderProfileConclusion(student, latest, overall);
+  }
+
+  function skillNode(skill, row, position, index) {
+    const level = getSkillLevel(row);
+    const status = row?.Status || 'Belum Menguasai';
+    const tp = row?.TPLevel || 'TP1';
+    const code = `K${index + 1}`;
+    return `
+      <div class="skill-node level-${level}" style="left:${position.x}%; top:${position.y}%">
+        <div class="skill-gem"><span>${escapeHtml(code)}</span></div>
+        <em>Kuasa ${escapeHtml(powerLevelLabel(level))}</em>
+        <strong>${escapeHtml(skill)}</strong>
+        <small>${escapeHtml(status)} · ${escapeHtml(tp)}</small>
+      </div>
+    `;
+  }
+
+  function getAuraPosition(index) {
+    const rings = [
+      { count: 8, radiusX: 22, radiusY: 22, offset: 0 },
+      { count: 12, radiusX: 34, radiusY: 34, offset: Math.PI / 12 },
+      { count: 15, radiusX: 44, radiusY: 43, offset: 0 }
+    ];
+    let start = 0;
+    for (const ring of rings) {
+      if (index < start + ring.count) {
+        const localIndex = index - start;
+        const angle = (localIndex / ring.count * Math.PI * 2) - Math.PI / 2 + ring.offset;
+        return {
+          x: Math.round((50 + Math.cos(angle) * ring.radiusX) * 10) / 10,
+          y: Math.round((52 + Math.sin(angle) * ring.radiusY) * 10) / 10
+        };
+      }
+      start += ring.count;
+    }
+    const angle = ((index - start) / 18 * Math.PI * 2) - Math.PI / 2;
+    const radiusX = 46;
+    const radiusY = 45;
+    return {
+      x: Math.round((50 + Math.cos(angle) * radiusX) * 10) / 10,
+      y: Math.round((52 + Math.sin(angle) * radiusY) * 10) / 10
+    };
+  }
+
+  function powerLevelLabel(level) {
+    if (level === 2) return 'Penuh';
+    if (level === 1) return 'Berkembang';
+    return 'Asas';
+  }
+
+  function renderProfileConclusion(student, latest, overall) {
+    const availableRows = state.skills
+      .map(skill => ({ skill, row: latest[skill] }))
+      .filter(item => item.row);
+
+    const strongest = state.skills.filter(skill => getSkillLevel(latest[skill]) === 2);
+    const developing = state.skills.filter(skill => getSkillLevel(latest[skill]) === 1);
+    const needsSupport = state.skills.filter(skill => getSkillLevel(latest[skill]) === 0);
+    const intro = `${student.Name} berada pada ${overall.percent}% penguasaan keseluruhan. Kuasa paling kukuh: ${strongest.join(', ') || 'belum direkodkan'}. Fokus pengukuhan: ${needsSupport.join(', ') || developing.join(', ') || 'pengayaan berterusan'}.`;
+
+    const cards = [
+      `<div class="profile-conclusion-card"><strong>Rumusan Profil</strong><p>${escapeHtml(intro)}</p></div>`
+    ];
+
+    availableRows.forEach(({ skill, row }) => {
+      const conclusion = row.AutoConclusion || buildAssessmentConclusion({
+        Skill: skill,
+        Status: row.Status,
+        TPLevel: row.TPLevel,
+        ReadingScale: row.ReadingScale,
+        CommentScale3: row.CommentScale3,
+        CommentScale2: row.CommentScale2,
+        CommentScale1: row.CommentScale1,
+        TeacherNote: row.TeacherNote
+      });
+
+      if (conclusion) {
+        cards.push(`<div class="profile-conclusion-card"><strong>${escapeHtml(skill)}</strong><p>${escapeHtml(conclusion)}</p></div>`);
+      }
+    });
+
+    return cards.join('');
+  }
+
+  function renderAssessmentHistory() {
+    const studentId = state.selectedStudentId;
+    const rows = state.assessments
+      .filter(row => row.StudentID === studentId)
+      .sort((a, b) => String(b.AssessmentDate || '').localeCompare(String(a.AssessmentDate || '')));
+
+    qs('#assessmentHistoryCount').textContent = `${rows.length} rekod`;
+    qs('#assessmentHistory').innerHTML = rows.map(row => `
+      <div class="history-item">
+        <strong>${escapeHtml(row.Skill)}</strong>
+        ${statusBadge(row.Status)}
+        <span>${escapeHtml(row.TPLevel)}</span>
+        <span>${escapeHtml(row.TeacherNote || '-')}</span>
+        <div class="row-actions">
+          ${row.EvidenceURL ? `<a class="secondary-btn" href="${escapeAttr(firstUrl(row.EvidenceURL))}" target="_blank">Evidens</a>` : ''}
+          <button class="secondary-btn" type="button" onclick="editAssessment('${row.AssessmentID}')">Edit</button>
+          <button class="danger-btn" type="button" onclick="deleteAssessmentRecord('${row.AssessmentID}')">Padam</button>
+        </div>
+      </div>
+    `).join('') || emptyState();
+  }
+
+  function renderEvidence() {
+    const studentById = Object.fromEntries(state.students.map(student => [student.StudentID, student]));
+    qs('#evidenceCountLabel').textContent = `${state.evidence.length} fail`;
+    qs('#evidenceTableBody').innerHTML = state.evidence.map(item => `
+      <tr>
+        <td><strong>${escapeHtml(item.FileName)}</strong></td>
+        <td>${escapeHtml(studentById[item.StudentID]?.Name || item.StudentID || '-')}</td>
+        <td>${escapeHtml(item.FileType || '-')}</td>
+        <td>${formatDate(item.UploadedAt)}</td>
+        <td><a href="${escapeAttr(item.DriveURL)}" target="_blank">Buka</a></td>
+        <td><button class="danger-btn" type="button" onclick="deleteEvidenceRecord('${item.EvidenceID}')">Padam</button></td>
+      </tr>
+    `).join('') || tableEmpty(6);
+  }
+
+  function renderReportStudentOptions() {
+    const className = qs('#reportClassSelect').value;
+    const rows = className ? state.students.filter(student => student.Class === className) : state.students;
+    fillSelect(
+      qs('#reportStudentSelect'),
+      [''].concat(rows.map(student => student.StudentID)),
+      ['Semua Murid'].concat(rows.map(student => `${student.Name} (${student.Class || '-'})`))
+    );
+  }
+
+  function renderReports() {
+    const className = qs('#reportClassSelect').value;
+    const studentId = qs('#reportStudentSelect').value;
+    const students = className ? state.students.filter(student => student.Class === className) : state.students;
+    const studentIds = new Set(students.map(student => student.StudentID));
+    const assessments = state.assessments.filter(row => studentIds.has(row.StudentID));
+    const dashboard = buildClientDashboard(students, assessments);
+
+    let html = `
+      <article class="report-card">
+        <h3>Laporan Kelas ${className ? escapeHtml(className) : 'Semua Kelas'}</h3>
+        <p>Jumlah murid: <strong>${students.length}</strong></p>
+        <p>${escapeHtml(dashboard.classDevelopmentText)}</p>
+        <div class="skill-summary-list">
+          ${dashboard.skillSummary.map(row => `
+            <div class="summary-row">
+              <strong>${escapeHtml(row.Skill)}</strong>
+              <div class="bar-track"><span class="bar-fill" style="width:${row.MasteryPercent}%"></span></div>
+              <span>${row.MasteryPercent}%</span>
+            </div>
+          `).join('')}
+        </div>
+      </article>
+      <article class="report-card">
+        <h3>Ringkasan TP1 hingga TP6</h3>
+        <div class="chip-list">
+          ${dashboard.tpSummary.map(row => `<span class="chip">${row.TPLevel}: ${row.Count}</span>`).join('')}
+        </div>
+      </article>
+    `;
+
+    if (studentId) {
+      const student = state.students.find(row => row.StudentID === studentId);
+      const latest = latestSkillMap(studentId);
+      const overall = calculateOverall(latest);
+      html += `
+        <article class="report-card">
+          <h3>Laporan Individu Murid</h3>
+          ${infoRow('Nama', student?.Name || '-')}
+          ${infoRow('Kelas', student?.Class || '-')}
+          ${infoRow('Penguasaan', `${overall.percent}%`)}
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Kemahiran</th><th>Status</th><th>TP</th><th>Catatan</th></tr></thead>
+              <tbody>
+                ${state.skills.map(skill => {
+                  const row = latest[skill];
+                  return `<tr><td>${skill}</td><td>${row ? statusBadge(row.Status) : statusBadge('Belum Menguasai')}</td><td>${row?.TPLevel || 'TP1'}</td><td>${escapeHtml(row?.TeacherNote || '-')}</td></tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      `;
+    }
+
+    qs('#reportOutput').innerHTML = html;
+  }
+
+  function renderSettings() {
+    qs('#settingDriveFolderId').value = state.settings.DriveFolderID || '';
+    qs('#settingSchoolName').value = state.settings.SchoolName || '';
+    qs('#settingAllowedEmails').value = state.settings.AllowedEmails || '';
+  }
+
+  async function handleStudentSubmit(event) {
+    event.preventDefault();
+    const payload = {
+      StudentID: qs('#studentId').value,
+      Name: qs('#studentName').value,
+      MyKid: qs('#studentMyKid').value,
+      Class: qs('#studentClass').value,
+      Gender: qs('#studentGender').value,
+      TeacherName: qs('#studentTeacher').value
+    };
+
+    setLoading(true);
+    try {
+      if (payload.StudentID) await server('updateStudent', payload);
+      else await server('createStudent', payload);
+      qs('#studentDialog').close();
+      await reloadData();
+      toast('Rekod murid disimpan.');
+    } catch (error) {
+      toast(error.message || String(error), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleAssessmentSubmit(event) {
+    event.preventDefault();
+    const commentPayload = getCommentScalePayload();
+    const payload = {
+      AssessmentID: qs('#assessmentId').value,
+      StudentID: qs('#assessmentStudentId').value,
+      Skill: qs('#assessmentSkill').value,
+      Status: qs('#assessmentStatus').value,
+      TPLevel: qs('#assessmentTP').value,
+      ...commentPayload,
+      AutoConclusion: buildAssessmentConclusion({
+        Skill: qs('#assessmentSkill').value,
+        Status: qs('#assessmentStatus').value,
+        TPLevel: qs('#assessmentTP').value,
+        TeacherNote: qs('#assessmentNote').value,
+        ...commentPayload
+      }),
+      TeacherNote: qs('#assessmentNote').value,
+      AssessmentDate: qs('#assessmentDate').value
+    };
+    const file = qs('#assessmentEvidence').files[0];
+
+    setLoading(true);
+    try {
+      const saved = await server('saveAssessment', payload);
+      if (file) {
+        await uploadFile(file, saved.StudentID, saved.AssessmentID);
+      }
+      resetAssessmentForm();
+      await reloadData();
+      state.selectedStudentId = saved.StudentID;
+      syncStudentSelectors();
+      renderProfile();
+      toast('Rekod kemahiran disimpan.');
+    } catch (error) {
+      toast(error.message || String(error), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleEvidenceSubmit(event) {
+    event.preventDefault();
+    const file = qs('#evidenceFile').files[0];
+    if (!file) return toast('Pilih fail evidens dahulu.', 'error');
+
+    setLoading(true);
+    try {
+      await uploadFile(file, qs('#evidenceStudentId').value, qs('#evidenceAssessmentId').value);
+      qs('#evidenceForm').reset();
+      await reloadData();
+      toast('Evidens berjaya dimuat naik.');
+    } catch (error) {
+      toast(error.message || String(error), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSettingsSubmit(event) {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      await server('saveSetting', 'DriveFolderID', qs('#settingDriveFolderId').value.trim());
+      await server('saveSetting', 'SchoolName', qs('#settingSchoolName').value.trim());
+      await server('saveSetting', 'AllowedEmails', qs('#settingAllowedEmails').value.trim());
+      await reloadData();
+      toast('Tetapan disimpan.');
+    } catch (error) {
+      toast(error.message || String(error), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function uploadFile(file, studentId, assessmentId) {
+    const base64 = await readFileAsBase64(file);
+    return server('uploadEvidence', {
+      studentId,
+      assessmentId: assessmentId || '',
+      fileName: file.name,
+      fileType: file.type || 'application/octet-stream',
+      base64
+    });
+  }
+
+  function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function openStudentDialog(studentId = '') {
+    const student = state.students.find(row => row.StudentID === studentId);
+    qs('#studentDialogTitle').textContent = student ? 'Edit Murid' : 'Tambah Murid';
+    qs('#studentId').value = student?.StudentID || '';
+    qs('#studentName').value = student?.Name || '';
+    qs('#studentMyKid').value = student?.MyKid || '';
+    qs('#studentClass').value = student?.Class || '';
+    qs('#studentGender').value = student?.Gender || '';
+    qs('#studentTeacher').value = student?.TeacherName || '';
+    qs('#studentDialog').showModal();
+  }
+
+  function selectStudentProfile(studentId) {
+    state.selectedStudentId = studentId;
+    syncStudentSelectors();
+    switchView('profile');
+    renderProfile();
+    renderAssessmentHistory();
+  }
+
+  async function deleteStudentRecord(studentId) {
+    if (!confirm('Padam murid ini bersama assessment dan rekod evidens berkaitan? Fail fizikal dalam Drive tidak dipadam secara automatik.')) return;
+    setLoading(true);
+    try {
+      await server('deleteStudent', studentId);
+      await reloadData();
+      toast('Murid dipadam.');
+    } catch (error) {
+      toast(error.message || String(error), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function editAssessment(assessmentId) {
+    const row = state.assessments.find(item => item.AssessmentID === assessmentId);
+    if (!row) return;
+    qs('#assessmentId').value = row.AssessmentID;
+    qs('#assessmentStudentId').value = row.StudentID;
+    qs('#assessmentSkill').value = row.Skill;
+    qs('#assessmentStatus').value = row.Status;
+    qs('#assessmentTP').value = row.TPLevel;
+    qs('#assessmentReadingScale').value = row.ReadingScale || detectReadingScaleFromNote(row.TeacherNote || '');
+    qs('#commentScale3').value = row.CommentScale3 || '';
+    qs('#commentScale2').value = row.CommentScale2 || '';
+    qs('#commentScale1').value = row.CommentScale1 || '';
+    qs('#assessmentDate').value = toDateInput(row.AssessmentDate);
+    qs('#assessmentNote').value = row.TeacherNote || '';
+    state.selectedStudentId = row.StudentID;
+    syncStudentSelectors();
+    refreshAssessmentAssistants();
+    switchView('profile');
+    qs('#assessmentForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function deleteAssessmentRecord(assessmentId) {
+    if (!confirm('Padam rekod pentaksiran ini?')) return;
+    setLoading(true);
+    try {
+      await server('deleteAssessment', assessmentId);
+      await reloadData();
+      toast('Rekod pentaksiran dipadam.');
+    } catch (error) {
+      toast(error.message || String(error), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteEvidenceRecord(evidenceId) {
+    if (!confirm('Padam rekod pautan evidens ini? Fail fizikal dalam Drive tidak dipadam secara automatik.')) return;
+    setLoading(true);
+    try {
+      await server('deleteEvidence', evidenceId);
+      await reloadData();
+      toast('Rekod evidens dipadam.');
+    } catch (error) {
+      toast(error.message || String(error), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function resetAssessmentForm() {
+    qs('#assessmentId').value = '';
+    qs('#assessmentSkill').value = state.skills[0] || '';
+    qs('#assessmentStatus').value = state.statuses[0] || '';
+    qs('#assessmentTP').value = state.tpLevels[0] || '';
+    qs('#assessmentReadingScale').value = '';
+    qs('#commentScale3').value = '';
+    qs('#commentScale2').value = '';
+    qs('#commentScale1').value = '';
+    qs('#assessmentDate').value = today();
+    qs('#assessmentNote').value = '';
+    qs('#assessmentEvidence').value = '';
+    if (state.selectedStudentId) qs('#assessmentStudentId').value = state.selectedStudentId;
+    refreshAssessmentAssistants();
+  }
+
+  function selectedStudent() {
+    return state.students.find(student => student.StudentID === state.selectedStudentId) || state.students[0] || null;
+  }
+
+  function latestSkillMap(studentId) {
+    const map = {};
+    state.assessments
+      .filter(row => row.StudentID === studentId)
+      .forEach(row => {
+        const current = map[row.Skill];
+        const currentTime = current ? new Date(current.AssessmentDate || current.UpdatedAt || 0).getTime() : 0;
+        const rowTime = new Date(row.AssessmentDate || row.UpdatedAt || 0).getTime();
+        if (!current || rowTime >= currentTime) map[row.Skill] = row;
+      });
+    return map;
+  }
+
+  function getSkillLevel(row) {
+    if (!row) return 0;
+    if (row.Status === 'Telah Menguasai') return 2;
+    if (row.Status === 'Sedang Menguasai') return 1;
+    return 0;
+  }
+
+  function calculateOverall(latest) {
+    const score = state.skills.reduce((sum, skill) => sum + getSkillLevel(latest[skill]), 0);
+    const maxScore = Math.max(state.skills.length * 2, 1);
+    const percent = Math.round(score / maxScore * 100);
+    return { score, maxScore, percent };
+  }
+
+  function overallText(overall) {
+    if (overall.percent >= 80) return 'Murid menunjukkan penguasaan kukuh dan bersedia untuk pengayaan.';
+    if (overall.percent >= 45) return 'Murid sedang menguasai beberapa kemahiran dan memerlukan latihan pengukuhan.';
+    return 'Murid memerlukan bimbingan berstruktur dan evidens perkembangan secara berkala.';
+  }
+
+  function buildClientDashboard(customStudents = state.students, customAssessments = state.assessments) {
+    const classCounts = {};
+    customStudents.forEach(student => {
+      classCounts[student.Class || 'Tanpa Kelas'] = (classCounts[student.Class || 'Tanpa Kelas'] || 0) + 1;
+    });
+
+    const skillSummary = state.skills.map(skill => {
+      let mastered = 0;
+      let inProgress = 0;
+      let notMastered = 0;
+      customStudents.forEach(student => {
+        const latest = latestSkillMapFrom(customAssessments, student.StudentID);
+        const row = latest[skill];
+        if (row?.Status === 'Telah Menguasai') mastered++;
+        else if (row?.Status === 'Sedang Menguasai') inProgress++;
+        else notMastered++;
+      });
+      const total = Math.max(customStudents.length, 1);
+      return {
+        Skill: skill,
+        Mastered: mastered,
+        InProgress: inProgress,
+        NotMastered: notMastered,
+        MasteryPercent: Math.round(mastered / total * 100)
+      };
+    });
+
+    const needsSupport = [];
+    customStudents.forEach(student => {
+      const latest = latestSkillMapFrom(customAssessments, student.StudentID);
+      state.skills.forEach(skill => {
+        const row = latest[skill];
+        if (!row || row.Status !== 'Telah Menguasai') {
+          needsSupport.push({
+            StudentID: student.StudentID,
+            Name: student.Name,
+            Class: student.Class,
+            Skill: skill,
+            Status: row?.Status || 'Belum Menguasai',
+            TPLevel: row?.TPLevel || 'TP1'
+          });
+        }
+      });
+    });
+
+    const tpSummary = state.tpLevels.map(tp => ({
+      TPLevel: tp,
+      Count: customAssessments.filter(row => row.TPLevel === tp).length
+    }));
+
+    const strongest = skillSummary.slice().sort((a, b) => b.MasteryPercent - a.MasteryPercent)[0];
+    const weakest = skillSummary.slice().sort((a, b) => a.MasteryPercent - b.MasteryPercent)[0];
+
+    return {
+      totalStudents: customStudents.length,
+      classCounts,
+      skillSummary,
+      needsSupport,
+      tpSummary,
+      classDevelopmentText: customStudents.length
+        ? `Kelas mempunyai ${customStudents.length} murid. Kemahiran paling kukuh ialah ${strongest.Skill} (${strongest.MasteryPercent}%). Fokus intervensi disarankan pada ${weakest.Skill} (${weakest.MasteryPercent}%).`
+        : 'Belum ada data murid.'
+    };
+  }
+
+  function latestSkillMapFrom(rows, studentId) {
+    const map = {};
+    rows.filter(row => row.StudentID === studentId).forEach(row => {
+      const current = map[row.Skill];
+      const currentTime = current ? new Date(current.AssessmentDate || current.UpdatedAt || 0).getTime() : 0;
+      const rowTime = new Date(row.AssessmentDate || row.UpdatedAt || 0).getTime();
+      if (!current || rowTime >= currentTime) map[row.Skill] = row;
+    });
+    return map;
+  }
+
+  function server(functionName, ...args) {
+    if (window.google?.script?.run) {
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)[functionName](...args);
+      });
+    }
+    return mockServer(functionName, ...args);
+  }
+
+  async function mockServer(functionName, ...args) {
+    await new Promise(resolve => setTimeout(resolve, 120));
+    if (!window.__mockData) window.__mockData = getMockData();
+    const data = window.__mockData;
+
+    if (functionName === 'getInitialData') return structuredClone(data);
+    if (functionName === 'createStudent') {
+      const row = { ...args[0], StudentID: `STU-MOCK-${Date.now()}`, CreatedAt: new Date().toISOString(), UpdatedAt: new Date().toISOString() };
+      data.students.push(row);
+      data.dashboard = buildClientDashboard(data.students, data.assessments);
+      return row;
+    }
+    if (functionName === 'updateStudent') {
+      const index = data.students.findIndex(student => student.StudentID === args[0].StudentID);
+      if (index >= 0) data.students[index] = { ...data.students[index], ...args[0], UpdatedAt: new Date().toISOString() };
+      data.dashboard = buildClientDashboard(data.students, data.assessments);
+      return data.students[index];
+    }
+    if (functionName === 'deleteStudent') {
+      data.students = data.students.filter(student => student.StudentID !== args[0]);
+      data.assessments = data.assessments.filter(row => row.StudentID !== args[0]);
+      data.evidence = data.evidence.filter(row => row.StudentID !== args[0]);
+      data.dashboard = buildClientDashboard(data.students, data.assessments);
+      return { ok: true };
+    }
+    if (functionName === 'saveAssessment') {
+      const payload = args[0];
+      const row = { ...payload, AssessmentID: payload.AssessmentID || `ASM-MOCK-${Date.now()}`, UpdatedAt: new Date().toISOString() };
+      const index = data.assessments.findIndex(item => item.AssessmentID === row.AssessmentID);
+      if (index >= 0) data.assessments[index] = row;
+      else data.assessments.push(row);
+      data.dashboard = buildClientDashboard(data.students, data.assessments);
+      return row;
+    }
+    if (functionName === 'deleteAssessment') {
+      data.assessments = data.assessments.filter(row => row.AssessmentID !== args[0]);
+      data.dashboard = buildClientDashboard(data.students, data.assessments);
+      return { ok: true };
+    }
+    if (functionName === 'uploadEvidence') {
+      const payload = args[0];
+      const row = {
+        EvidenceID: `EVD-MOCK-${Date.now()}`,
+        StudentID: payload.studentId,
+        AssessmentID: payload.assessmentId,
+        FileName: payload.fileName,
+        FileType: payload.fileType,
+        DriveURL: '#',
+        UploadedAt: new Date().toISOString()
+      };
+      data.evidence.push(row);
+      return row;
+    }
+    if (functionName === 'deleteEvidence') {
+      data.evidence = data.evidence.filter(row => row.EvidenceID !== args[0]);
+      return { ok: true };
+    }
+    if (functionName === 'saveSetting') {
+      data.settings[args[0]] = args[1];
+      return data.settings;
+    }
+    return null;
+  }
+
+  function getMockData() {
+    const skills = readingSkills.slice();
+    const statuses = ['Belum Menguasai', 'Sedang Menguasai', 'Telah Menguasai'];
+    const tpLevels = ['TP1', 'TP2', 'TP3', 'TP4', 'TP5', 'TP6'];
+    const students = [
+      { StudentID: 'STU-1', Name: 'Muhammad Adi Khuzaimi Bin Zainal', MyKid: 'M001', Class: '4 Dinamik', Gender: 'Lelaki', TeacherName: 'Mohammad Afza Amzar', CreatedAt: today(), UpdatedAt: today() },
+      { StudentID: 'STU-2', Name: 'Nur Aisyah Binti Azmi', MyKid: 'M002', Class: '4 Dinamik', Gender: 'Perempuan', TeacherName: 'Mohammad Afza Amzar', CreatedAt: today(), UpdatedAt: today() }
+    ];
+    const assessments = [
+      {
+        AssessmentID: 'ASM-1',
+        StudentID: 'STU-1',
+        Skill: 'Huruf Kecil',
+        Status: 'Telah Menguasai',
+        TPLevel: 'TP4',
+        ReadingScale: 'Skala 3',
+        CommentScale3: 'Murid membaca ayat mudah dengan lancar dan yakin.',
+        CommentScale2: 'Masih boleh dibimbing untuk bacaan teks lebih panjang.',
+        CommentScale1: '',
+        AutoConclusion: 'Skala 3. Bagi pecahan membaca Huruf Kecil, status semasa ialah Telah Menguasai (TP4). Skala 3 / Tahap Tinggi: Murid mengenal huruf kecil dengan lancar dan yakin. Skala 2 / Tahap Sederhana: Masih boleh dibimbing untuk bacaan teks lebih panjang.',
+        TeacherNote: 'Skala Membaca: Skala 3 - Tahap Paling Tinggi (Pembaca Berdikari). Maksud: Murid membaca lancar dengan sebutan, intonasi dan jeda yang sesuai.',
+        EvidenceURL: '',
+        AssessmentDate: today(),
+        UpdatedAt: today()
+      },
+      {
+        AssessmentID: 'ASM-2',
+        StudentID: 'STU-1',
+        Skill: 'Huruf Besar',
+        Status: 'Sedang Menguasai',
+        TPLevel: 'TP3',
+        ReadingScale: '',
+        CommentScale3: '',
+        CommentScale2: 'Murid memahami arahan ringkas dan boleh memberi respons dengan bimbingan.',
+        CommentScale1: 'Perlu pengulangan arahan bagi tugasan lebih kompleks.',
+        AutoConclusion: 'Bagi pecahan membaca Huruf Besar, status semasa ialah Sedang Menguasai (TP3). Skala 2 / Tahap Sederhana: Murid sedang mengecam huruf besar dengan bimbingan. Skala 1 / Tahap Rendah: Perlu latihan pengecaman huruf secara berulang.',
+        TeacherNote: 'Murid mengecam sebahagian huruf besar.',
+        EvidenceURL: '',
+        AssessmentDate: today(),
+        UpdatedAt: today()
+      },
+      { AssessmentID: 'ASM-3', StudentID: 'STU-2', Skill: 'Huruf Vokal', Status: 'Telah Menguasai', TPLevel: 'TP5', ReadingScale: '', CommentScale3: 'Murid mengenal huruf vokal dengan jelas dalam aktiviti kumpulan.', CommentScale2: '', CommentScale1: '', AutoConclusion: 'Bagi pecahan membaca Huruf Vokal, status semasa ialah Telah Menguasai (TP5). Skala 3 / Tahap Tinggi: Murid mengenal huruf vokal dengan jelas dalam aktiviti kumpulan.', TeacherNote: 'Mengenal huruf vokal dengan baik.', EvidenceURL: '', AssessmentDate: today(), UpdatedAt: today() }
+    ];
+    const data = {
+      appTitle: 'Sistem Pentaksiran Bilik Darjah Bahasa Melayu',
+      skills,
+      statuses,
+      tpLevels,
+      settings: { DriveFolderID: '', SchoolName: 'SK Kampung Kenang', AllowedEmails: '' },
+      students,
+      assessments,
+      evidence: [],
+      dashboard: null
+    };
+    const original = { ...state, skills, tpLevels };
+    Object.assign(state, data);
+    data.dashboard = buildClientDashboard(students, assessments);
+    Object.assign(state, original);
+    return data;
+  }
+
+  function fillSelect(select, values, labels, explicitLabels) {
+    const finalLabels = explicitLabels || labels;
+    select.innerHTML = values.map((value, index) => `<option value="${escapeAttr(value)}">${escapeHtml(finalLabels[index] ?? value)}</option>`).join('');
+  }
+
+  function uniqueClasses() {
+    return [...new Set(state.students.map(student => student.Class).filter(Boolean))].sort();
+  }
+
+  function averageMastery(summary) {
+    if (!summary.length) return 0;
+    return Math.round(summary.reduce((sum, row) => sum + (row.MasteryPercent || 0), 0) / summary.length);
+  }
+
+  function makeInitials(name) {
+    return String(name || 'M')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(part => part[0])
+      .join('')
+      .toUpperCase();
+  }
+
+  function statusBadge(status) {
+    const level = status === 'Telah Menguasai' ? 2 : status === 'Sedang Menguasai' ? 1 : 0;
+    return `<span class="badge level-${level}">${escapeHtml(status || 'Belum Menguasai')}</span>`;
+  }
+
+  function infoRow(label, value) {
+    return `<div class="info-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+  }
+
+  function emptyState() {
+    return qs('#emptyStateTemplate').innerHTML;
+  }
+
+  function tableEmpty(colspan) {
+    return `<tr><td colspan="${colspan}">${emptyState()}</td></tr>`;
+  }
+
+  function firstUrl(value) {
+    return String(value || '').split(/\s+/).find(Boolean) || '#';
+  }
+
+  function formatDate(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString('ms-MY', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  function toDateInput(value) {
+    if (!value) return today();
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+    return date.toISOString().slice(0, 10);
+  }
+
+  function today() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  function escapeAttr(value) {
+    return escapeHtml(value).replaceAll('\n', ' ');
+  }
+
+  function qs(selector) {
+    return document.querySelector(selector);
+  }
+
+  function setLoading(isLoading) {
+    document.body.classList.toggle('loading', isLoading);
+  }
+
+  function toast(message, type = 'success') {
+    const element = qs('#toast');
+    element.textContent = message;
+    element.className = `toast show ${type === 'error' ? 'error' : ''}`;
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(() => {
+      element.classList.remove('show');
+    }, 3200);
+  }
+
+  window.openStudentDialog = openStudentDialog;
+  window.selectStudentProfile = selectStudentProfile;
+  window.deleteStudentRecord = deleteStudentRecord;
+  window.editAssessment = editAssessment;
+  window.deleteAssessmentRecord = deleteAssessmentRecord;
+  window.deleteEvidenceRecord = deleteEvidenceRecord;
+</script>
